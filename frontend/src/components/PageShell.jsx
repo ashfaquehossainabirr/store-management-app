@@ -44,6 +44,9 @@ export default function PageShell({ title, subtitle, actions, children }) {
         .hamburger-btn span { display: block; width: 16px; height: 2px; background: var(--text-secondary); border-radius: 2px; }
         .mobile-topbar-title { font-family: var(--font-display); font-weight: 700; font-size: 16px; }
         .mobile-topbar-spacer { flex: 1; }
+        @media (max-width: 1280px) {
+          .page-main { padding: 28px 28px; }
+        }
         @media (max-width: 900px) {
           .page-shell { flex-direction: column; }
           .mobile-topbar {

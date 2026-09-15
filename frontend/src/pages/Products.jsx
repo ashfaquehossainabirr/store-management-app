@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Package, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Plus, Pencil, Trash2, Package, ChevronLeft, ChevronRight, SlidersHorizontal, FileDown, History } from 'lucide-react';
 import PageShell from '../components/PageShell';
 import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
@@ -9,6 +10,7 @@ import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { useDebounce } from '../hooks/useDebounce';
 import { formatMoney } from '../utils/currency';
+import { exportToCSV } from '../utils/csv';
 
 const emptyForm = { name: '', sku: '', barcode: '', category: '', unit: 'pcs', costPrice: '', sellPrice: '', stock: '', reorderLevel: 5, description: '' };
 
@@ -32,6 +34,10 @@ export default function Products() {
   const [deleting, setDeleting] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [adjusting, setAdjusting] = useState(null);
+  const [adjustQty, setAdjustQty] = useState('');
+  const [adjustReason, setAdjustReason] = useState('');
+  const [adjustError, setAdjustError] = useState('');
 
   useEffect(() => {
     api.get('/categories').then((res) => setCategories(res.data));
@@ -116,11 +122,62 @@ export default function Products() {
     return { label: 'In stock', color: 'var(--status-delivered)', bg: 'color-mix(in srgb, var(--status-delivered) 14%, transparent)', border: 'color-mix(in srgb, var(--status-delivered) 40%, transparent)' };
   };
 
+  const openAdjust = (p) => {
+    setAdjusting(p);
+    setAdjustQty('');
+    setAdjustReason('');
+    setAdjustError('');
+  };
+
+  const submitAdjust = async (e) => {
+    e.preventDefault();
+    const qty = Number(adjustQty);
+    if (!qty) {
+      setAdjustError('Enter a non-zero quantity');
+      return;
+    }
+    setBusy(true);
+    setAdjustError('');
+    try {
+      await api.patch(`/products/${adjusting._id}/stock`, { adjustment: qty, reason: adjustReason });
+      setAdjusting(null);
+      load();
+    } catch (err) {
+      setAdjustError(err.response?.data?.message || 'Could not adjust stock');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const exportCsv = async () => {
+    const res = await api.get('/products', { params: { search: debouncedSearch, category: categoryFilter, lowStock: lowStockOnly || undefined, export: 'true' } });
+    exportToCSV(
+      'products.csv',
+      res.data.items.map((p) => ({
+        Name: p.name,
+        SKU: p.sku,
+        Barcode: p.barcode || '',
+        Category: p.category?.name || '',
+        Unit: p.unit,
+        'Cost Price': p.costPrice,
+        'Sell Price': p.sellPrice,
+        Stock: p.stock,
+        'Reorder Level': p.reorderLevel,
+      }))
+    );
+  };
+
   return (
     <PageShell
       title="Products"
       subtitle="Manage your product catalog and stock levels."
-      actions={canManage && <button className="btn btn-primary" onClick={openNew}><Plus size={15} /> New Product</button>}
+      actions={
+        <>
+          <Link to="/products/stock-history" className="btn"><History size={15} /> Stock History</Link>
+          <button className="btn" onClick={exportCsv}><FileDown size={15} /> Export CSV</button>
+          {canManage && <button className="btn btn-primary" onClick={openNew}><Plus size={15} /> New Product</button>}
+        </>
+      }
     >
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 18, alignItems: 'center' }}>
         <SearchInput value={search} onChange={setSearch} placeholder="Search by name, SKU, barcode…" />
@@ -171,6 +228,7 @@ export default function Products() {
                       <td><span className="badge" style={{ color: badge.color, background: badge.bg, border: `1px solid ${badge.border}` }}>{badge.label}</span></td>
                       {canManage && (
                         <td style={{ textAlign: 'right' }}>
+                          <button className="btn btn-sm" onClick={() => openAdjust(p)} title="Adjust stock" style={{ marginRight: 6 }}><SlidersHorizontal size={13} /></button>
                           <button className="btn btn-sm" onClick={() => openEdit(p)} style={{ marginRight: 6 }}><Pencil size={13} /></button>
                           <button className="btn btn-sm btn-danger" onClick={() => setDeleting(p)}><Trash2 size={13} /></button>
                         </td>
@@ -257,6 +315,28 @@ export default function Products() {
             .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
             @media (max-width: 480px) { .form-grid-2, .form-grid-3 { grid-template-columns: 1fr; } }
           `}</style>
+        </Modal>
+      )}
+
+      {adjusting && (
+        <Modal title={`Adjust Stock — ${adjusting.name}`} onClose={() => setAdjusting(null)} width={380}>
+          <form onSubmit={submitAdjust} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>Current stock: <strong style={{ color: 'var(--text-primary)' }}>{adjusting.stock} {adjusting.unit}</strong></div>
+            <div>
+              <label>Quantity change</label>
+              <input type="number" value={adjustQty} onChange={(e) => setAdjustQty(e.target.value)} placeholder="e.g. 10 or -5" required autoFocus />
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Positive to add stock, negative to remove (damage, loss, recount…).</div>
+            </div>
+            <div>
+              <label>Reason</label>
+              <input value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} placeholder="e.g. Damaged in storage, stock recount…" />
+            </div>
+            {adjustError && <div style={{ color: 'var(--text-error)', fontSize: 12.5 }}>{adjustError}</div>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button type="button" className="btn" onClick={() => setAdjusting(null)} disabled={busy}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save Adjustment'}</button>
+            </div>
+          </form>
         </Modal>
       )}
 

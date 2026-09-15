@@ -30,8 +30,83 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap"
       rel="stylesheet"
     />
+    <style>
+      html, body { background: #0b1017; }
+      #app-preloader {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+        background: radial-gradient(1200px 600px at 50% -10%, rgba(79, 216, 168, 0.16), transparent), #0b1017;
+        opacity: 1;
+        transition: opacity 0.35s ease;
+      }
+      #app-preloader.ap-hide { opacity: 0; pointer-events: none; }
+      .ap-mark {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #4fd8a8, #8b7cff);
+        box-shadow: 0 12px 32px -10px rgba(79, 216, 168, 0.45);
+        animation: ap-pulse 1.6s ease-in-out infinite;
+      }
+      .ap-mark svg { width: 28px; height: 28px; }
+      .ap-wordmark {
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 20px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: #eaf0f5;
+      }
+      .ap-wordmark span { color: #4fd8a8; }
+      .ap-bar {
+        width: 140px;
+        height: 3px;
+        border-radius: 3px;
+        background: #1c2731;
+        overflow: hidden;
+      }
+      .ap-bar-fill {
+        width: 40%;
+        height: 100%;
+        border-radius: 3px;
+        background: linear-gradient(90deg, #4fd8a8, #8b7cff);
+        animation: ap-slide 1.1s ease-in-out infinite;
+      }
+      @keyframes ap-pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.08); }
+      }
+      @keyframes ap-slide {
+        0% { transform: translateX(-140%); }
+        100% { transform: translateX(350%); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .ap-mark { animation: none; }
+        .ap-bar-fill { animation: none; width: 70%; margin-left: 15%; }
+        #app-preloader { transition: none; }
+      }
+    </style>
   </head>
   <body>
+    <div id="app-preloader">
+      <div class="ap-mark">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 7.5L12 3l9 4.5-9 4.5-9-4.5Z" stroke="#0b1017" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M3 7.5V16.5L12 21V12" stroke="#0b1017" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M21 7.5V16.5L12 21" stroke="#0b1017" stroke-width="1.6" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="ap-wordmark">Store<span>Flow</span></div>
+      <div class="ap-bar"><div class="ap-bar-fill"></div></div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

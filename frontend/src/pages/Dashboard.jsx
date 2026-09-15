@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { DollarSign, ShoppingBag, Package, AlertTriangle, Users, TrendingUp } from 'lucide-react';
+import { DollarSign, ShoppingBag, Package, AlertTriangle, Users, TrendingUp, ClipboardList } from 'lucide-react';
 import PageShell from '../components/PageShell';
 import StatCard from '../components/StatCard';
 import StatGrid from '../components/StatGrid';
@@ -138,9 +138,14 @@ export default function Dashboard() {
               {data.lowStockCount === 0 ? (
                 <div className="empty-state" style={{ padding: 30 }}>All products are well stocked.</div>
               ) : (
-                <div className="low-stock-note">
-                  {data.lowStockCount} product{data.lowStockCount === 1 ? '' : 's'} at or below reorder level. Visit Products and filter by "Low stock" to restock.
-                </div>
+                <>
+                  <div className="low-stock-note">
+                    {data.lowStockCount} product{data.lowStockCount === 1 ? '' : 's'} at or below reorder level.
+                  </div>
+                  <Link to="/purchases?reorder=1" className="btn btn-primary" style={{ marginTop: 10, justifyContent: 'center' }}>
+                    <ClipboardList size={14} /> Create Purchase Order
+                  </Link>
+                </>
               )}
             </div>
           </div>

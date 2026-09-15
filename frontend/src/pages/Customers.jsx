@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Users } from 'lucide-react';
+import { Plus, Pencil, Trash2, Users, Wallet } from 'lucide-react';
 import PageShell from '../components/PageShell';
 import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
@@ -27,6 +27,14 @@ export default function Customers() {
   const [deleting, setDeleting] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
+  const [ledgerFor, setLedgerFor] = useState(null);
+  const [ledger, setLedger] = useState(null);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [payAmount, setPayAmount] = useState('');
+  const [payNote, setPayNote] = useState('');
+  const [payBusy, setPayBusy] = useState(false);
+  const [payError, setPayError] = useState('');
 
   useEffect(() => {
     api.get('/settings').then((res) => setSymbol(res.data.currencySymbol || '$'));
@@ -65,6 +73,31 @@ export default function Customers() {
       setError(err.response?.data?.message || 'Could not delete customer');
       setDeleting(null);
     } finally { setBusy(false); }
+  };
+
+  const openLedger = (c) => {
+    setLedgerFor(c);
+    setPayAmount('');
+    setPayNote('');
+    setPayError('');
+    setLedgerLoading(true);
+    api.get(`/customers/${c._id}/ledger`).then((res) => setLedger(res.data)).finally(() => setLedgerLoading(false));
+  };
+
+  const submitPayment = async (e) => {
+    e.preventDefault();
+    setPayBusy(true);
+    setPayError('');
+    try {
+      await api.post(`/customers/${ledgerFor._id}/payments`, { amount: Number(payAmount), note: payNote });
+      const res = await api.get(`/customers/${ledgerFor._id}/ledger`);
+      setLedger(res.data);
+      setPayAmount('');
+      setPayNote('');
+      load();
+    } catch (err) {
+      setPayError(err.response?.data?.message || 'Could not record payment');
+    } finally { setPayBusy(false); }
   };
 
   return (
@@ -106,6 +139,7 @@ export default function Customers() {
                   <td style={{ textAlign: 'right' }} className="mono">{formatMoney(c.totalSpent, symbol)}</td>
                   {canManage && (
                     <td style={{ textAlign: 'right' }}>
+                      <button className="btn btn-sm" onClick={() => openLedger(c)} title="Balance & payments" style={{ marginRight: 6 }}><Wallet size={13} /></button>
                       <button className="btn btn-sm" onClick={() => openEdit(c)} style={{ marginRight: 6 }}><Pencil size={13} /></button>
                       <button className="btn btn-sm btn-danger" onClick={() => setDeleting(c)}><Trash2 size={13} /></button>
                     </td>
@@ -124,7 +158,7 @@ export default function Customers() {
               <label>Name</label>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required autoFocus />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div className="form-grid-2">
               <div>
                 <label>Phone</label>
                 <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
@@ -154,6 +188,67 @@ export default function Customers() {
       {deleting && (
         <ConfirmModal title="Delete customer?" message={`This will permanently delete "${deleting.name}".`} confirmLabel="Delete" busy={busy} onConfirm={confirmDelete} onClose={() => setDeleting(null)} />
       )}
+
+      {ledgerFor && (
+        <Modal title={`${ledgerFor.name} — Balance`} onClose={() => setLedgerFor(null)} width={460}>
+          {ledgerLoading || !ledger ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 30 }}><Spinner size={24} /></div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-inset)', borderRadius: 8 }}>
+                <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Total due</span>
+                <span className="mono" style={{ fontSize: 17, fontWeight: 700, color: ledger.totalDue > 0 ? 'var(--text-error)' : 'var(--status-delivered)' }}>{formatMoney(ledger.totalDue, symbol)}</span>
+              </div>
+
+              {ledger.dueSales.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)', marginBottom: 8 }}>Outstanding invoices</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {ledger.dueSales.map((s) => (
+                      <div key={s._id} style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '2px 10px', fontSize: 12.5 }}>
+                        <span className="mono" style={{ color: 'var(--accent-cyan)' }}>{s.invoiceNumber}</span>
+                        <span style={{ color: 'var(--text-secondary)' }}>{new Date(s.createdAt).toLocaleDateString()}</span>
+                        <span className="mono" style={{ fontWeight: 700, marginLeft: 'auto' }}>{formatMoney(s.dueAmount, symbol)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {canManage && ledger.totalDue > 0 && (
+                <form onSubmit={submitPayment} style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 4, borderTop: '1px solid var(--border-hairline-soft)' }}>
+                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)', marginTop: 8 }}>Record payment</div>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <input type="number" min="0" step="0.01" max={ledger.totalDue} placeholder="Amount" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} required style={{ flex: '1 1 120px' }} />
+                    <input placeholder="Note (optional)" value={payNote} onChange={(e) => setPayNote(e.target.value)} style={{ flex: '1 1 140px' }} />
+                  </div>
+                  {payError && <div style={{ color: 'var(--text-error)', fontSize: 12.5 }}>{payError}</div>}
+                  <button type="submit" className="btn btn-primary" disabled={payBusy} style={{ justifyContent: 'center' }}>{payBusy ? 'Saving…' : 'Record Payment'}</button>
+                </form>
+              )}
+
+              {ledger.payments.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)', marginBottom: 8 }}>Payment history</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {ledger.payments.map((p) => (
+                      <div key={p._id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                        <span>{new Date(p.createdAt).toLocaleDateString()}{p.note ? ` — ${p.note}` : ''}</span>
+                        <span className="mono" style={{ color: 'var(--status-delivered)', fontWeight: 700 }}>{formatMoney(p.amount, symbol)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </Modal>
+      )}
+
+      <style>{`
+        .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        @media (max-width: 480px) { .form-grid-2 { grid-template-columns: 1fr; } }
+      `}</style>
     </PageShell>
   );
 }

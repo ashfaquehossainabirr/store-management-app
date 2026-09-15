@@ -165,7 +165,7 @@ export default function Users() {
               <label>{editing ? 'New password (optional)' : 'Password'}</label>
               <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} minLength={6} required={!editing} />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div className="form-grid-2">
               <div>
                 <label>Role</label>
                 <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} disabled={editing?.isMainAdmin}>
@@ -202,6 +202,11 @@ export default function Users() {
           onClose={() => setDeactivating(null)}
         />
       )}
+
+      <style>{`
+        .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        @media (max-width: 480px) { .form-grid-2 { grid-template-columns: 1fr; } }
+      `}</style>
     </PageShell>
   );
 }

@@ -1,5 +1,6 @@
 const express = require('express');
 const Product = require('../models/Product');
+const StockAdjustment = require('../models/StockAdjustment');
 const escapeRegex = require('../utils/escapeRegex');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -15,6 +16,11 @@ router.get('/', async (req, res) => {
   }
   if (category) query.category = category;
   if (lowStock === 'true') query.$expr = { $lte: ['$stock', '$reorderLevel'] };
+
+  if (req.query.export === 'true') {
+    const items = await Product.find(query).populate('category', 'name').sort({ createdAt: -1 });
+    return res.json({ items, total: items.length, page: 1, pages: 1 });
+  }
 
   const pageNum = Math.max(1, parseInt(page, 10) || 1);
   const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
@@ -61,12 +67,29 @@ router.put('/:id', authorize('admin', 'manager'), async (req, res) => {
 router.patch('/:id/stock', authorize('admin', 'manager'), async (req, res) => {
   try {
     const { adjustment, reason } = req.body;
+    const change = Number(adjustment || 0);
+    if (!change) return res.status(400).json({ message: 'Enter a non-zero quantity' });
     const product = await Product.findById(req.params.id);
     if (!product) return res.status(404).json({ message: 'Product not found' });
-    const next = product.stock + Number(adjustment || 0);
+    const previousStock = product.stock;
+    const next = previousStock + change;
     if (next < 0) return res.status(400).json({ message: 'Stock cannot go below zero' });
     product.stock = next;
     await product.save();
+
+    await StockAdjustment.create({
+      product: product._id,
+      productName: product.name,
+      sku: product.sku,
+      type: change > 0 ? 'increase' : 'decrease',
+      quantityChange: change,
+      previousStock,
+      newStock: next,
+      reason: reason || '',
+      adjustedBy: req.user._id,
+      adjustedByName: req.user.name,
+    });
+
     res.json(product);
   } catch (err) {
     res.status(400).json({ message: err.message });

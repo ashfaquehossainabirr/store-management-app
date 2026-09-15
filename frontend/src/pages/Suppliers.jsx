@@ -115,7 +115,7 @@ export default function Suppliers() {
               <label>Contact person</label>
               <input value={form.contactPerson} onChange={(e) => setForm({ ...form, contactPerson: e.target.value })} />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div className="form-grid-2">
               <div>
                 <label>Phone</label>
                 <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
@@ -141,6 +141,11 @@ export default function Suppliers() {
       {deleting && (
         <ConfirmModal title="Delete supplier?" message={`This will permanently delete "${deleting.name}".`} confirmLabel="Delete" busy={busy} onConfirm={confirmDelete} onClose={() => setDeleting(null)} />
       )}
+
+      <style>{`
+        .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        @media (max-width: 480px) { .form-grid-2 { grid-template-columns: 1fr; } }
+      `}</style>
     </PageShell>
   );
 }

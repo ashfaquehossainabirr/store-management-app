@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Receipt, ChevronLeft, ChevronRight, Download, Trash2 } from 'lucide-react';
+import { Receipt, ChevronLeft, ChevronRight, Download, Trash2, FileDown } from 'lucide-react';
 import PageShell from '../components/PageShell';
 import SearchInput from '../components/SearchInput';
 import Spinner from '../components/Spinner';
@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { useDebounce } from '../hooks/useDebounce';
 import { formatMoney } from '../utils/currency';
 import { downloadBlob } from '../utils/download';
+import { exportToCSV } from '../utils/csv';
 
 const statusStyle = {
   paid: { color: 'var(--status-delivered)', bg: 'color-mix(in srgb, var(--status-delivered) 14%, transparent)', border: 'color-mix(in srgb, var(--status-delivered) 40%, transparent)' },
@@ -51,6 +52,25 @@ export default function Invoices() {
 
   const downloadPdf = (sale) => downloadBlob(api.get(`/sales/${sale._id}/pdf`, { responseType: 'blob' }), `${sale.invoiceNumber}.pdf`);
 
+  const exportCsv = async () => {
+    const res = await api.get('/sales', { params: { search: debouncedSearch, paymentStatus, export: 'true' } });
+    exportToCSV(
+      'invoices.csv',
+      res.data.items.map((s) => ({
+        Invoice: s.invoiceNumber,
+        Customer: s.customerName,
+        Date: new Date(s.createdAt).toLocaleDateString(),
+        Status: s.status,
+        'Payment Status': s.paymentStatus,
+        Total: s.total,
+        'Amount Paid': s.amountPaid,
+        Due: s.dueAmount,
+        Refunded: s.refundedAmount || 0,
+        Cashier: s.cashierName,
+      }))
+    );
+  };
+
   const confirmDelete = async () => {
     setBusy(true);
     setError('');
@@ -74,6 +94,7 @@ export default function Invoices() {
           <option value="partial">Partial</option>
           <option value="due">Due</option>
         </select>
+        <button className="btn" onClick={exportCsv}><FileDown size={14} /> Export CSV</button>
       </div>
 
       {error && !deleting && <div style={{ color: 'var(--text-error)', fontSize: 13, marginBottom: 12 }}>{error}</div>}
@@ -104,7 +125,7 @@ export default function Invoices() {
                       <td><Link to={`/invoices/${s._id}`} className="mono" style={{ color: 'var(--accent-cyan)', fontWeight: 600 }}>{s.invoiceNumber}</Link></td>
                       <td>{s.customerName}</td>
                       <td className="hide-mobile" style={{ color: 'var(--text-secondary)' }}>{new Date(s.createdAt).toLocaleDateString()}</td>
-                      <td><span className="badge" style={{ color: st.color, background: st.bg, border: `1px solid ${st.border}` }}>{s.paymentStatus}{s.status === 'cancelled' ? ' · void' : ''}</span></td>
+                      <td><span className="badge" style={{ color: st.color, background: st.bg, border: `1px solid ${st.border}` }}>{s.paymentStatus}{s.status === 'cancelled' ? ' · void' : ''}{s.status === 'refunded' ? ' · refunded' : ''}</span></td>
                       <td style={{ textAlign: 'right' }} className="mono">{formatMoney(s.total, symbol)}</td>
                       <td style={{ textAlign: 'right' }}>
                         <button className="btn btn-sm" onClick={() => downloadPdf(s)} title="Download PDF" style={{ marginRight: canManage ? 6 : 0 }}><Download size={13} /></button>

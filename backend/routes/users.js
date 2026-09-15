@@ -1,6 +1,7 @@
 const express = require('express');
 const User = require('../models/User');
 const escapeRegex = require('../utils/escapeRegex');
+const logActivity = require('../utils/logActivity');
 const { protect, authorize } = require('../middleware/auth');
 
 const router = express.Router();
@@ -24,6 +25,7 @@ router.post('/', authorize('admin'), async (req, res) => {
       return res.status(400).json({ message: 'Name, email and password are required' });
     }
     const user = await User.create({ name, email, password, role: role || 'cashier', phone });
+    logActivity({ action: 'user_create', entityType: 'user', entityLabel: user.email, details: `role: ${user.role}`, user: req.user });
     res.status(201).json(user.toSafeObject());
   } catch (err) {
     if (err.code === 11000) return res.status(400).json({ message: 'Email already in use' });
@@ -40,9 +42,15 @@ router.put('/:id', authorize('admin'), async (req, res) => {
       return res.status(400).json({ message: "The main admin's role/status cannot be changed" });
     }
     if (name !== undefined) user.name = name;
-    if (role !== undefined) user.role = role;
+    if (role !== undefined && role !== user.role) {
+      logActivity({ action: 'user_role_change', entityType: 'user', entityLabel: user.email, details: `${user.role} → ${role}`, user: req.user });
+      user.role = role;
+    }
     if (phone !== undefined) user.phone = phone;
-    if (isActive !== undefined) user.isActive = isActive;
+    if (isActive !== undefined && isActive !== user.isActive) {
+      logActivity({ action: isActive ? 'user_activate' : 'user_deactivate', entityType: 'user', entityLabel: user.email, user: req.user });
+      user.isActive = isActive;
+    }
     if (password) user.password = password;
     await user.save();
     res.json(user.toSafeObject());
@@ -56,6 +64,7 @@ router.delete('/:id', authorize('admin'), async (req, res) => {
   if (!user) return res.status(404).json({ message: 'User not found' });
   if (user.isMainAdmin) return res.status(400).json({ message: 'The main admin cannot be deleted' });
   await user.deleteOne();
+  logActivity({ action: 'user_delete', entityType: 'user', entityLabel: user.email, user: req.user });
   res.json({ message: 'User deleted' });
 });
 

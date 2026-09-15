@@ -1,6 +1,7 @@
 const express = require('express');
 const User = require('../models/User');
 const generateToken = require('../utils/generateToken');
+const logActivity = require('../utils/logActivity');
 const { protect } = require('../middleware/auth');
 
 const router = express.Router();
@@ -37,6 +38,7 @@ router.post('/login', async (req, res) => {
     const match = await user.comparePassword(password);
     if (!match) return res.status(401).json({ message: 'Invalid email or password' });
     const token = generateToken(user);
+    logActivity({ action: 'login', entityType: 'user', entityLabel: user.email, user });
     res.json({ token, user: user.toSafeObject() });
   } catch (err) {
     res.status(500).json({ message: err.message });

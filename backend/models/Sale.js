@@ -8,6 +8,31 @@ const saleItemSchema = new mongoose.Schema(
     price: { type: Number, required: true, min: 0 },
     quantity: { type: Number, required: true, min: 1 },
     total: { type: Number, required: true, min: 0 },
+    refundedQuantity: { type: Number, default: 0, min: 0 },
+  },
+  { _id: false }
+);
+
+const refundLineSchema = new mongoose.Schema(
+  {
+    product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
+    name: { type: String, required: true },
+    sku: { type: String, default: '' },
+    price: { type: Number, required: true, min: 0 },
+    quantity: { type: Number, required: true, min: 1 },
+    total: { type: Number, required: true, min: 0 },
+  },
+  { _id: false }
+);
+
+const refundSchema = new mongoose.Schema(
+  {
+    items: { type: [refundLineSchema], required: true },
+    amount: { type: Number, required: true, min: 0 },
+    reason: { type: String, default: '' },
+    refundedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    refundedByName: { type: String, default: '' },
+    createdAt: { type: Date, default: Date.now },
   },
   { _id: false }
 );
@@ -34,6 +59,8 @@ const saleSchema = new mongoose.Schema(
     cashier: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     cashierName: { type: String, default: '' },
     notes: { type: String, default: '' },
+    refundedAmount: { type: Number, default: 0, min: 0 },
+    refunds: { type: [refundSchema], default: [] },
   },
   { timestamps: true }
 );

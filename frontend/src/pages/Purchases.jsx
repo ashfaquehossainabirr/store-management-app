@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Plus, PackageCheck, X, ClipboardList, Ban, Pencil, Trash2, Eye, Download } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Plus, PackageCheck, X, ClipboardList, Ban, Pencil, Trash2, Eye, Download, FileDown } from 'lucide-react';
 import PageShell from '../components/PageShell';
 import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
@@ -9,6 +10,7 @@ import api from '../api/axios';
 import { useDebounce } from '../hooks/useDebounce';
 import { formatMoney } from '../utils/currency';
 import { downloadBlob } from '../utils/download';
+import { exportToCSV } from '../utils/csv';
 
 const statusStyle = {
   pending: { color: 'var(--status-hold)', bg: 'var(--chip-urgent-bg)', border: 'var(--chip-urgent-border)' },
@@ -17,6 +19,7 @@ const statusStyle = {
 };
 
 export default function Purchases() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [symbol, setSymbol] = useState('$');
@@ -55,6 +58,25 @@ export default function Purchases() {
     api.get('/settings').then((res) => setSymbol(res.data.currencySymbol || '$'));
   }, []);
 
+  useEffect(() => {
+    if (searchParams.get('reorder') !== '1') return;
+    api.get('/dashboard/low-stock').then((res) => {
+      const low = res.data || [];
+      setEditing(null);
+      setSupplier('');
+      setLines(
+        low.length > 0
+          ? low.map((p) => ({ product: p._id, quantity: Math.max(1, p.reorderLevel * 2 - p.stock), cost: p.costPrice }))
+          : [{ product: '', quantity: 1, cost: 0 }]
+      );
+      setShipping(0);
+      setError('');
+      setShowForm(true);
+    });
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   const openNew = () => {
     setEditing(null);
     setSupplier('');
@@ -90,6 +112,22 @@ export default function Purchases() {
   };
 
   const total = lines.reduce((sum, l) => sum + (Number(l.quantity) || 0) * (Number(l.cost) || 0), 0) + Number(shipping || 0);
+
+  const exportCsv = async () => {
+    const res = await api.get('/purchases', { params: { search: debouncedSearch, export: 'true' } });
+    exportToCSV(
+      'purchase-orders.csv',
+      res.data.items.map((p) => ({
+        'PO Number': p.poNumber,
+        Supplier: p.supplierName,
+        Status: p.status,
+        Date: new Date(p.createdAt).toLocaleDateString(),
+        Subtotal: p.subtotal,
+        Shipping: p.shipping,
+        Total: p.total,
+      }))
+    );
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -160,7 +198,12 @@ export default function Purchases() {
     <PageShell
       title="Purchase Orders"
       subtitle="Restock from your suppliers and receive inventory."
-      actions={<button className="btn btn-primary" onClick={openNew}><Plus size={15} /> New Purchase Order</button>}
+      actions={
+        <>
+          <button className="btn" onClick={exportCsv}><FileDown size={15} /> Export CSV</button>
+          <button className="btn btn-primary" onClick={openNew}><Plus size={15} /> New Purchase Order</button>
+        </>
+      }
     >
       <div style={{ marginBottom: 18 }}>
         <SearchInput value={search} onChange={setSearch} placeholder="Search PO number or supplier…" />
@@ -230,7 +273,7 @@ export default function Purchases() {
               <label>Items</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {lines.map((line, i) => (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 70px 90px 30px', gap: 8, alignItems: 'center' }}>
+                  <div key={i} className="po-line-row">
                     <select value={line.product} onChange={(e) => updateLine(i, 'product', e.target.value)} required>
                       <option value="">Select product</option>
                       {products.map((p) => <option key={p._id} value={p._id}>{p.name}</option>)}
@@ -244,7 +287,7 @@ export default function Purchases() {
               <button type="button" className="btn btn-sm" onClick={addLine} style={{ marginTop: 8 }}><Plus size={13} /> Add line</button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div className="po-form-grid-2">
               <div>
                 <label>Shipping / handling</label>
                 <input type="number" min="0" step="0.01" value={shipping} onChange={(e) => setShipping(e.target.value)} />
@@ -409,6 +452,20 @@ export default function Purchases() {
           `}</style>
         </Modal>
       )}
+
+      <style>{`
+        .po-line-row { display: grid; grid-template-columns: 1fr 70px 90px 30px; gap: 8px; align-items: center; }
+        .po-form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        @media (max-width: 520px) {
+          .po-line-row {
+            grid-template-columns: 1fr 1fr 1fr; row-gap: 6px; padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-hairline-soft); margin-bottom: 2px;
+          }
+          .po-line-row select { grid-column: 1 / -1; }
+          .po-line-row button { justify-self: end; }
+          .po-form-grid-2 { grid-template-columns: 1fr; }
+        }
+      `}</style>
     </PageShell>
   );
 }
