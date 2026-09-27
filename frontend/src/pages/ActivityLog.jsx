@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ShieldCheck, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import PageShell from '../components/PageShell';
 import Spinner from '../components/Spinner';
+import ConfirmModal from '../components/ConfirmModal';
 import api from '../api/axios';
 
 const ACTION_LABELS = {
@@ -38,8 +39,10 @@ export default function ActivityLog() {
   const [action, setAction] = useState('');
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
+  const load = () => {
     setLoading(true);
     api
       .get('/activity-log', { params: { action: action || undefined, page, limit: 25 } })
@@ -48,20 +51,54 @@ export default function ActivityLog() {
         setPages(res.data.pages || 1);
       })
       .finally(() => setLoading(false));
-  }, [action, page]);
+  };
+
+  useEffect(load, [action, page]);
 
   useEffect(() => setPage(1), [action]);
 
+  const deleteAll = async () => {
+    setDeleting(true);
+    try {
+      await api.delete('/activity-log');
+      setShowDeleteAll(false);
+      setPage(1);
+      load();
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <PageShell title="Activity Log" subtitle="An audit trail of sensitive actions taken across the store.">
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 18 }}>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 18, justifyContent: 'space-between' }}>
         <select value={action} onChange={(e) => setAction(e.target.value)} style={{ width: 'auto', minWidth: 180 }}>
           <option value="">All actions</option>
           {Object.entries(ACTION_LABELS).map(([key, label]) => (
             <option key={key} value={key}>{label}</option>
           ))}
         </select>
+        <button
+          className="btn btn-danger btn-sm"
+          onClick={() => setShowDeleteAll(true)}
+          disabled={items.length === 0 && !loading}
+        >
+          <Trash2 size={14} style={{ marginRight: 6 }} />
+          Delete All
+        </button>
       </div>
+
+      {showDeleteAll && (
+        <ConfirmModal
+          title="Delete all activity logs?"
+          message="This will permanently delete the entire audit trail. This action cannot be undone."
+          confirmLabel="Delete All"
+          danger
+          busy={deleting}
+          onConfirm={deleteAll}
+          onClose={() => setShowDeleteAll(false)}
+        />
+      )}
 
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={26} /></div>

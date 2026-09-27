@@ -22,4 +22,9 @@ router.get('/', async (req, res) => {
   res.json({ items, total, page: pageNum, pages: Math.ceil(total / limitNum) });
 });
 
+router.delete('/', async (req, res) => {
+  await ActivityLog.deleteMany({});
+  res.json({ message: 'Activity log cleared' });
+});
+
 module.exports = router;
